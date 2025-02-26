@@ -13,7 +13,10 @@ extern Uint32  Gu32_modbus_outputIO[USART1_RX_LENGTH_MAX];
 extern Uint16  Gu16_modbus_bits_outputIO[USART1_RX_LENGTH_MAX];
 extern unsigned int     time_usart1;
 
-void USARTA_Init(Uint32 buad);
+void USARTA_Init(Uint32 baud);
+void USARTA_Init1(Uint32 baud);
+void USARTA_Init2(Uint32 baud);
+
 void USART_Transmit(Uint16 data);
 void tscia_fifo_init1(void);
 void scia_xmit(int a);

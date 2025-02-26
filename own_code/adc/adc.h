@@ -35,6 +35,9 @@ Uint16 Read_ADC_CH0_Value(void);
 void Read_ADC_SEQ1_Value_OVD(void);
 interrupt void  adc_isr(void);
 
+void ADCSample(void);
+void PwmReflash(void);
+
 //内部温度采集函数
 int16 GetTemperatureC(int16 sensorSample);
 int16 GetTemperatureK(int16 sensorSample);

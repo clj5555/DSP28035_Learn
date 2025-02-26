@@ -9,6 +9,7 @@
 
 //TX_INT_EN为1使能发送中断,为0不使能发送中断
 #define TX_INT_EN           0
+#define SCI_FIFO_EN         1  //使能FIFO，若不是用写0
 
 interrupt void USARTA_RxIntHandler(void);       //接收中断中断函数
 #if TX_INT_EN       > 0
@@ -18,8 +19,8 @@ interrupt void USARTA_RxIntHandler(void);       //接收中断中断函数
 #define USART1_RX_LENGTH_MAX 200
 
 //中断接收用的标志和缓存变量定义
-    Uint16    usart1_rx_length = 0;
-    Uint16   Frame_Length = 0;
+Uint16    usart1_rx_length = 0;
+Uint16   Frame_Length = 0;
 Uint16  COM1_RxBuff[USART1_RX_LENGTH_MAX]={0};//Uint16 COM1_RxBuff[15]={0}
 Uint16  COM1_TxBuff[USART1_RX_LENGTH_MAX]={0};//int8（f103）没有八位寄存器
 Uint32  Gu32_modbus_outputIO[USART1_RX_LENGTH_MAX];
@@ -29,58 +30,32 @@ Uint16  Gu16_modbus_bits_outputIO[USART1_RX_LENGTH_MAX];
 unsigned int    time_usart1,time_usart2;
 
 
+
 /**
  * @brief USARTA接收中断处理函数
- * 
- * 当USARTA接收缓冲器中有数据时，此函数会被调用。它的主要作用是读取接收到的数据，
- * 并将其存储到接收缓冲区中。此外，它还会重置接收数据的时间戳，并在接收到的数据
- * 超过最大长度时停止接收。
  */
 interrupt void USARTA_RxIntHandler(void)
 {
-//    // 检查接收缓冲器是否准备好
-//    if((SciaRegs.SCIRXST.bit.RXRDY) == 1)
-//    {
+    Uint16 rev=0;
+    // 检查接收缓冲器是否准备好
+    if((SciaRegs.SCIRXST.bit.RXRDY) == 1)
+    {
         // 重置时间戳
         time_usart1 = 0;
         // 将接收到的数据存储到缓冲区中
         COM1_RxBuff[usart1_rx_length] = SciaRegs.SCIRXBUF.all;
+//        rev= SciaRegs.SCIRXBUF.all ;
+//        USART_Transmit(rev);
+
         // 如果接收的数据长度未超过最大值，则增加长度计数
         if(usart1_rx_length < USART1_RX_LENGTH_MAX)//Frame_Length
         {
             usart1_rx_length ++;
         }
-//    }
-    // 发送PIE（可编程中断控制器）确认信号
-
-
-        SciaRegs.SCIFFRX.bit.RXFIFORESET    = 0;
-        SciaRegs.SCIFFRX.bit.RXFIFORESET    = 1;
-        SciaRegs.SCIFFRX.bit.RXFFINTCLR     = 1;
-
-    PieCtrlRegs.PIEACK.bit.ACK9 = 1;       
+    }
+        PieCtrlRegs.PIEACK.bit.ACK9 = 1;
 }
 
-/**
- * @brief USARTA接收中断处理函数
- */
-// interrupt void USARTA_RxIntHandler(void)
-// {
-//     while(SciaRegs.SCIFFRX.bit.RXFFST != 0) // 检查FIFO中是否有数据
-//     {
-//         // 重置时间戳
-//         time_usart1 = 0;
-//         // 将接收到的数据存储到缓冲区中
-//         COM1_RxBuff[usart1_rx_length] = SciaRegs.SCIRXBUF.all;
-//         // 如果接收的数据长度未超过最大值，则增加长度计数
-//         if(usart1_rx_length < USART1_RX_LENGTH_MAX)
-//         {
-//             usart1_rx_length++;
-//         }
-//     }
-//     // 发送PIE（可编程中断控制器）确认信号
-//     PieCtrlRegs.PIEACK.bit.ACK9 = 1;
-// }
 
 
 #if TX_INT_EN       > 0
@@ -94,64 +69,39 @@ interrupt void USARTA_TxIntHandler(void)
 }
 #endif
 
-
-static void USARTA_IntHandlerConfig(void)
+void USARTA_Init(Uint32 baud)
 {
-    EALLOW;
-    PieVectTable.SCIRXINTA= &USARTA_RxIntHandler;
-#if TX_INT_EN       > 0
-    PieVectTable.SCITXINTA = &USARTA_TxIntHandler;
-#endif
-    EDIS;
+    #if (SCI_FIFO_EN >0)
+    {
+        USARTA_Init2(baud);
+    }
+    #else
+    {
+        USARTA_Init1(baud);
+    }
+    #endif
 }
-
-
-static void USARTA_CpuIntEn(void)
-{
-    EALLOW;
-    PieCtrlRegs.PIECTRL.bit.ENPIE = 1;      // Enable the PIE block
-    PieCtrlRegs.PIEIER9.bit.INTx1=1;        // PIE Group 9, INT1
-#if TX_INT_EN       > 0
-    PieCtrlRegs.PIEIER9.bit.INTx2=1;        // PIE Group 9, INT2
-#endif
-    IER |= M_INT9;                          // Enable CPU INT
-    EINT;                                   //使能全局中断
-    ERTM;   // Enable Global realtime interrupt DBGM
-    EDIS;
-}
-
 
 
 /**
- * @brief 初始化USARTA模块
- * 
- * 本函数根据给定的波特率初始化USARTA模块，配置其数据格式、使能状态以及中断设置。
- * 注意要在函数InitSysCtrl()中开启SCIA外设时钟
- * 
- * @param buad 波特率，用于设置串口通信的速度
+ * @brief 无FIFO初始化USARTA模块
+ * @param buad 波特率
  */
-void USARTA_Init(Uint32 buad)
+void USARTA_Init1(Uint32 baud)
 {
     // 计算波特率寄存器的值，公式中的1875000是基于系统时钟计算得出的参考值
-    Uint16 brr_reg = (1875000/buad) - 1;    //15000000/8 = 1875000  //12000000/8=1500000
+    Uint16 brr_reg = (1875000/baud) - 1;    //15000000/8 = 1875000  //12000000/8=1500000
 
     // 初始化USARTA使用的GPIO端口
     InitSciaGpio();
-    SciaRegs.SCIFFTX.all =0xE040;
-    SciaRegs.SCIFFRX.all =0x204f;
-    SciaRegs.SCIFFCT.all =0x0;
-
-
-
 
     // 配置串口数据格式：1个停止位，无环回模式，无奇偶校验，8个数据位，异步模式，空闲线协议
-    SciaRegs.SCICCR.all =0x0007;            
+    SciaRegs.SCICCR.all =0x0007;
 
     // 使能TX、RX和内部SCICLK，禁用RX ERR、SLEEP和TXWAKE
-    SciaRegs.SCICTL1.all =0x0003;           
-
+    SciaRegs.SCICTL1.all =0x0003;
     // 配置控制寄存器2的相关位
-    SciaRegs.SCICTL2.all =0x0003;           
+    SciaRegs.SCICTL2.all =0x0003;
 
     // 根据宏定义决定是否使能发送中断
 #if TX_INT_EN       > 0
@@ -159,89 +109,93 @@ void USARTA_Init(Uint32 buad)
 #else
     SciaRegs.SCICTL2.bit.TXINTENA =0;       // 禁止发送中断
 #endif
-
-    // 使能接收中断
-    SciaRegs.SCICTL2.bit.RXBKINTENA =1;     
+    SciaRegs.SCICTL2.bit.RXBKINTENA =1;       // 使能接收中断
 
     // 设置波特率寄存器的高8位和低8位
     SciaRegs.SCIHBAUD    =(brr_reg>>8)&0x00FF;
     SciaRegs.SCILBAUD    =brr_reg&0x00FF;
+    SciaRegs.SCICTL1.all = 0x0023;  // Relinquish SCI from Reset
 
+    // 配置PIE中断
+    EALLOW;
+    PieVectTable.SCIRXINTA= &USARTA_RxIntHandler;
+#if TX_INT_EN       > 0
+    PieVectTable.SCITXINTA = &USARTA_TxIntHandler;
+#endif
+    EDIS;
 
-    SciaRegs.SCICTL1.all = 0x0063;  // Relinquish SCI from Reset
-    SciaRegs.SCIFFTX.bit.TXFIFOXRESET=1;
-    SciaRegs.SCIFFRX.bit.RXFIFORESET=1;
-
-
-    // 配置PIE中断函数
-    USARTA_IntHandlerConfig();
     // 使能PIE中断
-        USARTA_CpuIntEn();
-
-
-
-    // 使USARTA模块退出复位状态
-   // SciaRegs.SCICTL1.all =0x0023;
-
-
-    // 以下行代码被注释掉，可能是因为当前应用不需要使用环回模式
-    // SciaRegs.SCICCR.bit.LOOPBKENA =1; // Enable loop back
-
-    // 再次使USARTA模块退出复位状态，确保模块正常工作
-    SciaRegs.SCICTL1.all =0x0023; 
+    PieCtrlRegs.PIECTRL.bit.ENPIE = 1;      // Enable the PIE block
+    PieCtrlRegs.PIEIER9.bit.INTx1=1;        // PIE Group 9, INT1
+#if TX_INT_EN       > 0
+    PieCtrlRegs.PIEIER9.bit.INTx2=1;        // PIE Group 9, INT2
+#endif
+    IER |= M_INT9;                          // Enable CPU INT
 }
 
 
+
 /**
- * @brief 通过USART1发送字符串
- * 
- * 本函数通过USART1逐字节发送字符串，直到遇到字符串结束符'\0'。
- * 
- * @param msg 指向待发送字符串的指针
+ * @brief 有FIFO初始化USARTA模块
+ * @param buad 波特率
  */
-void USART1_SendString(char *msg)
+void USARTA_Init2(Uint32 baud)
 {
-    // 初始化索引变量i
-    int i=0;
+    // 计算波特率寄存器的值，公式中的1875000是基于系统时钟计算得出的参考值
+       Uint16 brr_reg = (1875000/baud) - 1;    //15000000/8 = 1875000  //12000000/8=1500000
+       InitSciaGpio();//init sci gpio
+       SciaRegs.SCICTL1.bit.SWRESET = 0;
 
-    // 循环发送字符串中的每个字符，直到遇到字符串结束符'\0'
-    while(msg[i] != '\0')
-    {
-        // 调用USART_Transmit函数发送当前字符
-        USART_Transmit(msg[i]);
-        // 索引变量自增，指向下一个字符
-        i++;
-    }
+       SciaRegs.SCICCR.all =0x0007;        // 1 stop bit,  No loopback
+                                           // No parity,8 char bits,无校验位
+                                           // 8个数据位
+       // 设置波特率寄存器的高8位和低8位
+       SciaRegs.SCIHBAUD    =(brr_reg>>8)&0x00FF;
+       SciaRegs.SCILBAUD    =brr_reg&0x00FF;
+
+       SciaRegs.SCICTL1.bit.SWRESET = 1;     // Relinquish SCI from Reset
+       SciaRegs.SCIFFTX.bit.SCIRST=1;
+
+       SciaRegs.SCIFFRX.bit.RXFFIL  = 1;  //设置FIFO深度
+
+       SciaRegs.SCICTL1.all |=0x0003;      // enable TX, RX, internal SCICLK,
+                                           // Disable RX ERR, SLEEP, TXWAKE
+
+       SciaRegs.SCIFFTX.bit.SCIFFENA = 1;      //使能FIFO中断
+       SciaRegs.SCIFFRX.bit.RXFFIENA=1;
+
+       //interrupt isr
+       EALLOW;
+       PieVectTable.SCIRXINTA= &USARTA_RxIntHandler;
+       //PieVectTable.SCITXINTA = &&UARTA_Txisr;
+       EDIS;
+       //sci interrupt in pie group 9.1(rx_ini) or 9.2(tx_int)
+       PieCtrlRegs.PIEIER9.bit.INTx1=1;        // PIE Group 9, RX_INT1
+       //PieCtrlRegs.PIEIER9.bit.INTx2=1;      // PIE Group 9, TX_INT2 DISEN
+       IER |= M_INT9;                          // Enable CPU INT
+       SciaRegs.SCIFFCT.all=0x00;
+       SciaRegs.SCIFFTX.bit.TXFIFOXRESET=1;
+       SciaRegs.SCIFFRX.bit.RXFIFORESET=1;
 }
 
 
 
 /**
- * 查询方式发送一个字节
- * 该函数通过USART异步串行通信接口传输数据
- * 它会等待传输缓冲区准备就绪，然后发送指定的数据
- * 
+ * 发送一个字节
  * @param data 要传输的数据，类型为Uint16，表示16位无符号整数
  */
 void USART_Transmit(Uint16 data)
 {
-    // 等待传输缓冲区准备就绪
     while (SciaRegs.SCICTL2.bit.TXRDY == 0)
-    {   //如果SCITXBUF没有准备好接收新的数据则一直等待直到标志置1
+    {
         ;
     }
-    // 将数据写入传输缓冲区，开始数据传输
     SciaRegs.SCITXBUF = data;
 }
 
 
 /**
  * USART_GetChar函数用于从一个数组中读取一帧数据，并检查是否接收到一帧完整的数据。
- * 
- * @param p_array 指向用于存储接收到的数据的数组的指针。
- * @param frame_len 表示一帧数据的长度。
- * @return 返回1表示成功接收到一帧完整的数据，返回0表示没有接收到完整的一帧数据。
- *
  * 此函数首先检查传入的帧长度是否与之前的不同，如果不同则更新帧长度。
  * 然后检查当前接收到的数据长度是否等于帧长度，如果相等，表示接收到一帧完整的数据，
  * 将这些数据复制到用户提供的数组中，并重置接收到的数据长度计数器，最后返回1表示成功。
@@ -275,13 +229,8 @@ Uint16 USART_GetChar(Uint16* p_array, Uint16 frame_len)
 
 /**
  * 从USART接收的数据中恢复速率信息。
- * 
  * 本函数通过USART接收一帧数据，然后检查数据的完整性与有效性。如果数据有效，则解析出速率信息和命令字节。
- * 
  * @param p_rate 指向一个int32变量的指针，用于存储解析后的速率值。
- * @return 返回命令字节，用于指示速率值的类型或其他控制信息。
- * 
- * 注意：本函数的设计考虑了数据的完整性和有效性检查，确保在接收到有效的数据帧之前不会解析速率值。
  */
 Uint16 USART_GetRate(int32* p_rate)
 {
@@ -314,6 +263,20 @@ Uint16 USART_GetRate(int32* p_rate)
     }
     // 返回命令字节，作为速率值的附加信息。
     return ch_cmd;
+}
+
+
+void USART1_SendString(char *msg)
+{
+    int i=0;
+    // 循环发送字符串中的每个字符，直到遇到字符串结束符'\0'
+    while(msg[i] != '\0')
+    {
+        // 调用USART_Transmit函数发送当前字符
+        USART_Transmit(msg[i]);
+        // 索引变量自增，指向下一个字符
+        i++;
+    }
 }
 
 
