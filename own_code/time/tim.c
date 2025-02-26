@@ -8,9 +8,6 @@
 #include "DSP2803x_Examples.h"   // DSP2833x 例子相关头文件
 
 
-//#include "leds.h"
-
-
 //定时器0初始化函数
 //Freq：CPU时钟频率（MHz）
 //Period：定时周期值，单位us
@@ -49,8 +46,8 @@ void TIM0_Init(float Freq, float Period)
     //使能总中断
     EINT;
     ERTM;
-
 }
+
 
 interrupt void TIM0_IRQn(void)
 {
