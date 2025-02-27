@@ -30,7 +30,6 @@ Uint16  Gu16_modbus_bits_outputIO[USART1_RX_LENGTH_MAX];
 unsigned int    time_usart1,time_usart2;
 
 
-
 /**
  * @brief USARTA接收中断处理函数
  */

@@ -570,14 +570,6 @@ extern volatile struct EPWM_REGS EPwm7Regs;
 
 
 
-interrupt void epwm1_timer_isr(void);
-interrupt void epwm2_timer_isr(void);
-void EPWM1_Init(Uint16 tbprd);
-void EPwm1A_SetCompare(Uint16 val);
-void EPwm1B_SetCompare(Uint16 val);
-void EPWM2_Init(Uint16 tbprd);
-void EPwm2A_SetCompare(Uint16 val);
-void EPwm2B_SetCompare(Uint16 val);
 #ifdef __cplusplus
 }
 #endif /* extern "C" */
