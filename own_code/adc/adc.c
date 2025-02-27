@@ -1,6 +1,5 @@
 /*
  * adc.c
- *
  *  Created on: 2018-1-29
  *      Author: Administrator
  */
@@ -8,141 +7,202 @@
 #include "adc.h"
 
 
-// È«¾Ö±äÁ¿£¬ÓÃÓÚ´æ´¢Ñ­»·¼ÆÊı
+// å…¨å±€å˜é‡ï¼Œç”¨äºå­˜å‚¨å¾ªç¯è®¡æ•°
 Uint16 LoopCount;
-Uint16 ConversionCount; //È«¾Ö±äÁ¿£¬ÓÃÓÚ´æ´¢×ª»»¼ÆÊı
+Uint16 ConversionCount; //å…¨å±€å˜é‡ï¼Œç”¨äºå­˜å‚¨è½¬æ¢è®¡æ•°
 Uint16 Voltage1[10];
 Uint16 Voltage2[10];
 
+struct  Get_Value SADC={0};
 
-// ³õÊ¼»¯ADCÄ£¿é
+
+// åˆå§‹åŒ–ADCæ¨¡å—
 void ADC_Init(void)
 {
-    EALLOW; // ÔÊĞí·ÃÎÊÊÜ±£»¤µÄ¼Ä´æÆ÷
-    SysCtrlRegs.PCLKCR0.bit.ADCENCLK = 1;    // ADC Ê¹ÄÜÍâÉèÊ±ÖÓ
+    EALLOW; // å…è®¸è®¿é—®å—ä¿æŠ¤çš„å¯„å­˜å™¨
+    SysCtrlRegs.PCLKCR0.bit.ADCENCLK = 1;    // ADC ä½¿èƒ½å¤–è®¾æ—¶é’Ÿ
     SysCtrlRegs.PCLKCR0.bit.TBCLKSYNC = 1;   // Disable TBCLK within the ePWM
     SysCtrlRegs.PCLKCR1.bit.EPWM1ENCLK = 1;  // ePWM1
-    EDIS; // ½ûÖ¹·ÃÎÊÊÜ±£»¤µÄ¼Ä´æÆ÷
+    EDIS; // ç¦æ­¢è®¿é—®å—ä¿æŠ¤çš„å¯„å­˜å™¨
 
     // Specific clock setting for this example:28335
 //    EALLOW;
 //    SysCtrlRegs.HISPCP.all = ADC_MODCLK;    // HSPCLK = SYSCLKOUT/2*ADC_MODCLK
 //    EDIS;
 
-    // ÖĞ¶ÏÓ³ÉäÉèÖÃ
+    // ä¸­æ–­æ˜ å°„è®¾ç½®
     EALLOW;
-    PieVectTable.ADCINT1 = &adc_isr; // ½«ADCINT1ÖĞ¶ÏÓ³Éäµ½adc_isrÖĞ¶Ï·şÎñÀı³Ì
+    PieVectTable.ADCINT1 = &adc_isr; // å°†ADCINT1ä¸­æ–­æ˜ å°„åˆ°adc_isrä¸­æ–­æœåŠ¡ä¾‹ç¨‹
     EDIS;
 
-    InitAdc();  // ³õÊ¼»¯ADCÄ£¿é
-    AdcOffsetSelfCal(); // Ö´ĞĞADCÆ«ÒÆ×ÔĞ£×¼
+    InitAdc();  // åˆå§‹åŒ–ADCæ¨¡å—
+    AdcOffsetSelfCal(); // æ‰§è¡ŒADCåç§»è‡ªæ ¡å‡†
 
-    // ³õÊ¼»¯ÖĞ¶Ï
-    PieCtrlRegs.PIEIER1.bit.INTx1 = 1;  // ÔÚPIEÖĞÊ¹ÄÜINT 1.1ÖĞ¶Ï
-    IER |= M_INT1; // Ê¹ÄÜCPUÖĞ¶Ï1
-    EINT; // È«¾ÖÊ¹ÄÜÖĞ¶ÏINTM
-    ERTM; // È«¾ÖÊ¹ÄÜÊµÊ±ÖĞ¶ÏDBGM
+    // åˆå§‹åŒ–ä¸­æ–­
+    PieCtrlRegs.PIEIER1.bit.INTx1 = 1;  // åœ¨PIEä¸­ä½¿èƒ½INT 1.1ä¸­æ–­
+    IER |= M_INT1; // ä½¿èƒ½CPUä¸­æ–­1
+    EINT; // å…¨å±€ä½¿èƒ½ä¸­æ–­INTM
+    ERTM; // å…¨å±€ä½¿èƒ½å®æ—¶ä¸­æ–­DBGM
 
-    LoopCount = 0; // ³õÊ¼»¯Ñ­»·¼ÆÊı±äÁ¿
-    ConversionCount = 0; // ³õÊ¼»¯×ª»»¼ÆÊı±äÁ¿
+    LoopCount = 0; // åˆå§‹åŒ–å¾ªç¯è®¡æ•°å˜é‡
+    ConversionCount = 0; // åˆå§‹åŒ–è½¬æ¢è®¡æ•°å˜é‡
 
-    // ½«ÄÚ²¿ÎÂ¶È´«¸ĞÆ÷Á¬½Óµ½ADCINA5Í¨µÀ
+    // å°†å†…éƒ¨æ¸©åº¦ä¼ æ„Ÿå™¨è¿æ¥åˆ°ADCINA5é€šé“
     EALLOW;
     AdcRegs.ADCCTL1.bit.TEMPCONV = 1;
     EDIS;
 
-    // ÅäÖÃADC
+    // é…ç½®ADC
     EALLOW;
-    AdcRegs.ADCCTL1.bit.INTPULSEPOS = 1; // ADCINT1ÔÚAdcResultsËø´æµ½Æä½á¹û¼Ä´æÆ÷Ç°1¸öÖÜÆÚ´¥·¢
-    AdcRegs.INTSEL1N2.bit.INT1E = 1; // Ê¹ÄÜADCINT1
-    AdcRegs.INTSEL1N2.bit.INT1CONT = 0; // ½ûÓÃADCINT1Á¬ĞøÄ£Ê½
-    AdcRegs.INTSEL1N2.bit.INT1SEL = 2; // ÉèÖÃEOC2´¥·¢ADCINT1
+    AdcRegs.ADCCTL1.bit.INTPULSEPOS = 1; // ADCINT1åœ¨AdcResultsé”å­˜åˆ°å…¶ç»“æœå¯„å­˜å™¨å‰1ä¸ªå‘¨æœŸè§¦å‘
+    AdcRegs.INTSEL1N2.bit.INT1E = 1;     // ä½¿èƒ½ADCINT1
+    AdcRegs.INTSEL1N2.bit.INT1CONT = 0; // ç¦ç”¨ADCINT1è¿ç»­æ¨¡å¼
+    AdcRegs.INTSEL1N2.bit.INT1SEL = 5; // è®¾ç½®EOC5è§¦å‘ADCINT1
 
-    AdcRegs.ADCSOC0CTL.bit.CHSEL = 0; // ÉèÖÃSOC0Í¨µÀÑ¡ÔñADCINA0
-    AdcRegs.ADCSOC1CTL.bit.CHSEL = 0; // ÉèÖÃSOC1Í¨µÀÑ¡ÔñADCINA0
-    AdcRegs.ADCSOC2CTL.bit.CHSEL = 5; // ÉèÖÃSOC2Í¨µÀÑ¡ÔñADCINA5
-    AdcRegs.ADCSOC3CTL.bit.CHSEL = 5; // ÉèÖÃSOC3Í¨µÀÑ¡ÔñADCINA6
+    AdcRegs.ADCSOC0CTL.bit.CHSEL = 0; // è®¾ç½®SOC0é€šé“é€‰æ‹©ADCINA0
+    AdcRegs.ADCSOC1CTL.bit.CHSEL = 0; // è®¾ç½®SOC1é€šé“é€‰æ‹©ADCINA0
+    AdcRegs.ADCSOC2CTL.bit.CHSEL = 1; // è®¾ç½®SOC2é€šé“é€‰æ‹©ADCINA1
+    AdcRegs.ADCSOC3CTL.bit.CHSEL = 3; // è®¾ç½®SOC3é€šé“é€‰æ‹©ADCINA1
+    AdcRegs.ADCSOC4CTL.bit.CHSEL = 5; // è®¾ç½®SOC4é€šé“é€‰æ‹©ADCINA5
+    AdcRegs.ADCSOC5CTL.bit.CHSEL = 6; // è®¾ç½®SOC5é€šé“é€‰æ‹©ADCINA6
 
     AdcRegs.ADCSOC0CTL.bit.TRIGSEL = 5;
-    AdcRegs.ADCSOC1CTL.bit.TRIGSEL = 5; // ÉèÖÃSOC1ÓÉEPWM1A´¥·¢
-    AdcRegs.ADCSOC2CTL.bit.TRIGSEL = 5; // ÉèÖÃSOC2ÓÉEPWM1A´¥·¢
+    AdcRegs.ADCSOC1CTL.bit.TRIGSEL = 5; // è®¾ç½®SOC1ç”±EPWM1Aè§¦å‘
+    AdcRegs.ADCSOC2CTL.bit.TRIGSEL = 5; // è®¾ç½®SOC2ç”±EPWM1Aè§¦å‘
+    AdcRegs.ADCSOC3CTL.bit.TRIGSEL = 5; // è®¾ç½®SOC3ç”±EPWM1Aè§¦å‘
+    AdcRegs.ADCSOC4CTL.bit.TRIGSEL = 5; // è®¾ç½®SOC4ç”±EPWM1Aè§¦å‘
+    AdcRegs.ADCSOC5CTL.bit.TRIGSEL = 5; // è®¾ç½®SOC5ç”±EPWM1Aè§¦å‘  //æš‚æ—¶ç”±EPWM1è§¦å‘ï¼Œåç»­éœ€è¦ä¿®æ”¹æˆEPWM3
 
     AdcRegs.ADCSOC0CTL.bit.ACQPS = 6;
-    AdcRegs.ADCSOC1CTL.bit.ACQPS = 6; // ÉèÖÃSOC1²ÉÑù±£³Ö´°¿ÚÎª7¸öADCÊ±ÖÓÖÜÆÚ
-    AdcRegs.ADCSOC2CTL.bit.ACQPS = 6; // ÉèÖÃSOC2²ÉÑù±£³Ö´°¿ÚÎª7¸öADCÊ±ÖÓÖÜÆÚ
+    AdcRegs.ADCSOC1CTL.bit.ACQPS = 6; // è®¾ç½®SOC1é‡‡æ ·ä¿æŒçª—å£ä¸º7ä¸ªADCæ—¶é’Ÿå‘¨æœŸ
+    AdcRegs.ADCSOC2CTL.bit.ACQPS = 6; // è®¾ç½®SOC2é‡‡æ ·ä¿æŒçª—å£ä¸º7ä¸ªADCæ—¶é’Ÿå‘¨æœŸ
+    AdcRegs.ADCSOC3CTL.bit.ACQPS = 6; // è®¾ç½®SOC3é‡‡æ ·ä¿æŒçª—å£ä¸º7ä¸ªADCæ—¶é’Ÿå‘¨æœŸ
+    AdcRegs.ADCSOC4CTL.bit.ACQPS = 6; // è®¾ç½®SOC4é‡‡æ ·ä¿æŒçª—å£ä¸º7ä¸ªADCæ—¶é’Ÿå‘¨æœŸ
+    AdcRegs.ADCSOC5CTL.bit.ACQPS = 6; // è®¾ç½®SOC5é‡‡æ ·ä¿æŒçª—å£ä¸º7ä¸ªADCæ—¶é’Ÿå‘¨æœŸ
     EDIS;
 
-    // ¼ÙÉèePWM1Ê±ÖÓÒÑ¾­ÔÚInitSysCtrl();ÖĞÆôÓÃ
-    EPwm1Regs.ETSEL.bit.SOCAEN = 1; // Ê¹ÄÜA×éSOC
-    EPwm1Regs.ETSEL.bit.SOCASEL = 4; // Ñ¡Ôñ´ÓCPMAÉÏ¼ÆÊıÑ¡ÔñSOC
-    EPwm1Regs.ETPS.bit.SOCAPRD = 1; // ÔÚµÚÒ»¸öÊÂ¼şÉÏÉú³ÉÂö³å
-    EPwm1Regs.CMPA.half.CMPA = 0x0080; // ÉèÖÃ±È½ÏAÖµ
-    EPwm1Regs.TBPRD = 0xFFFF; // ÉèÖÃePWM1ÖÜÆÚ
-    EPwm1Regs.TBCTL.bit.CTRMODE = 0; // ÉèÖÃ¼ÆÊıÄ£Ê½ÎªÏòÉÏ¼ÆÊı²¢¿ªÊ¼
+//    å‡è®¾ePWM1æ—¶é’Ÿå·²ç»åœ¨InitSysCtrl();ä¸­å¯ç”¨ æ­¤å¤„ä»£ç å·²ç»ç§»åŠ¨è‡³EPWMä¸­ï¼Œæ— éœ€å†ä½¿ç”¨
+//    EPwm1Regs.ETSEL.bit.SOCAEN = 1; // ä½¿èƒ½Aç»„SOC
+//    EPwm1Regs.ETSEL.bit.SOCASEL = 4; // é€‰æ‹©ä»CPMAä¸Šè®¡æ•°é€‰æ‹©SOC
+//    EPwm1Regs.ETPS.bit.SOCAPRD = 1; // åœ¨ç¬¬ä¸€ä¸ªäº‹ä»¶ä¸Šç”Ÿæˆè„‰å†²
+//    EPwm1Regs.CMPA.half.CMPA = 0x0080; // è®¾ç½®æ¯”è¾ƒAå€¼
+//    EPwm1Regs.TBPRD = 0xFFFF; // è®¾ç½®ePWM1å‘¨æœŸ
+//    EPwm1Regs.TBCTL.bit.CTRMODE = 0; // è®¾ç½®è®¡æ•°æ¨¡å¼ä¸ºå‘ä¸Šè®¡æ•°å¹¶å¼€å§‹
+
 }
 
-// ÖĞ¶Ï·şÎñÀı³Ì£¬ÓÃÓÚ´¦ÀíADCÖĞ¶Ï
+
+// ä¸­æ–­æœåŠ¡ä¾‹ç¨‹ï¼Œç”¨äºå¤„ç†ADCä¸­æ–­
 interrupt void  adc_isr(void)
 {
-    // Ê¹ÓÃstatic¹Ø¼ü×ÖÈ·±£iÔÚÖĞ¶Ï·şÎñ³ÌĞòÖ®¼ä±£³ÖÆäÖµ
+    // ä½¿ç”¨staticå…³é”®å­—ç¡®ä¿iåœ¨ä¸­æ–­æœåŠ¡ç¨‹åºä¹‹é—´ä¿æŒå…¶å€¼
     static Uint16 i=0;
-    i++; // Ôö¼Ó¼ÆÊıÆ÷iµÄÖµ
+    i++; // å¢åŠ è®¡æ•°å™¨içš„å€¼
 
-    // ´æ´¢ADC×ª»»½á¹ûµ½È«¾Ö±äÁ¿Êı×éÖĞ£¬ºöÂÔADCRESULT0×÷ÎªĞŞÕı´íÎóµÄ·½·¨
-    Voltage1[ConversionCount] = AdcResult.ADCRESULT1;
-    Voltage2[ConversionCount] = AdcResult.ADCRESULT2;
+    ADCSample();
+    PwmReflash();
 
-    // Èç¹ûÒÑ¾­¼ÇÂ¼ÁË20´Î×ª»»£¬ÖØÖÃ¼ÆÊıÆ÷
-    if(ConversionCount == 9)
-    {
-       ConversionCount = 0;
-    }
-    else
-    {
-        ConversionCount++; // ·ñÔò£¬Ôö¼Ó×ª»»¼ÆÊıÆ÷µÄÖµ
-    }
-
-    // Çå³ıADCINT1±êÖ¾Î»£¬ÎªÏÂÒ»´ÎSOC£¨Start of Conversion£©×ö×¼±¸
+    // æ¸…é™¤ADCINT1æ ‡å¿—ä½ï¼Œä¸ºä¸‹ä¸€æ¬¡SOCï¼ˆStart of Conversionï¼‰åšå‡†å¤‡
     AdcRegs.ADCINTFLGCLR.bit.ADCINT1 = 1;
-    // ÏòPIE£¨Programmable Interrupt Controller£©È·ÈÏÖĞ¶Ï´¦ÀíÍê³É
+    // å‘PIEï¼ˆProgrammable Interrupt Controllerï¼‰ç¡®è®¤ä¸­æ–­å¤„ç†å®Œæˆ
     PieCtrlRegs.PIEACK.bit.ACK1 = 1;
 }
 
-/**
- * ¶ÁÈ¡ADCÍ¨µÀ0µÄÖµ
- * 
- * ´Ëº¯ÊıÓÃÓÚ¶ÁÈ¡ADC£¨Ä£Êı×ª»»Æ÷£©Í¨µÀ0µÄ×ª»»½á¹û
- * ËüµÈ´ıADCÍê³É×ª»»£¬È»ºó¶ÁÈ¡½á¹û£¬²¢½«ÆäÓÒÒÆ4Î»ÒÔÊÊÓ¦12Î»µÄADC½á¹û
- * 
- * @return ×ª»»ºóµÄ12Î»ADCÖµ
- */
-Uint16 Read_ADC_CH0_Value(void)
+
+/*
+** ===================================================================
+**     Funtion Name :   void ADCSample(void)
+**     Description :    é‡‡æ ·è¾“å‡ºç”µå‹ã€è¾“å‡ºç”µæµã€æ»‘åŠ¨å˜é˜»å™¨ç”µå‹å€¼ï¼ˆè¾“å‡ºç”µå‹å‚è€ƒå€¼è®¾ç½®ï¼‰å¹¶å¯¹å…¶æ±‚å¹³å‡
+**     Parameters  :
+**     Returns     :
+** ===================================================================
+*/
+void ADCSample(void)
 {
-    // µÈ´ıADCĞòÁĞ1µÄ×ª»»Íê³É
-    //while (AdcRegs.ADCST.bit.INT_SEQ1== 0);
-    
-    // Çå³ıADCĞòÁĞ1µÄÖĞ¶Ï±êÖ¾
-    //AdcRegs.ADCST.bit.INT_SEQ1_CLR = 1;
-    
-    // ·µ»ØADCÍ¨µÀ0µÄ×ª»»½á¹û£¬ÓÒÒÆ4Î»ÒÔÊÊÓ¦12Î»µÄADC½á¹û
-    //return AdcRegs.ADCRESULT0>>4;
-    
-    // µ±Ç°ÊµÏÖÖĞ£¬º¯ÊıÖ±½Ó·µ»Ø0
-    return 0;
+      SADC.V0=(long)AdcResult.ADCRESULT0;
+      SADC.V1=(long)AdcResult.ADCRESULT1;
+      SADC.I1=(long)AdcResult.ADCRESULT2;
+      SADC.Iin=(long)AdcResult.ADCRESULT3;
+      SADC.Vin=(long)AdcResult.ADCRESULT4;
+      SADC.Iout=(long)AdcResult.ADCRESULT5;
+      SADC.Vout=(long)AdcResult.ADCRESULT6;
+
+      //é‡‡æ ·é™åˆ¶ï¼Œé™åˆ¶DSPé‡‡æ ·æœ¬èº«å­˜åœ¨é›¶åçš„æƒ…å†µ
+         if(SADC.V0<50)    SADC.V0=0;
+         if(SADC.V1<50)    SADC.V1=0;
+         if(SADC.I1<50)    SADC.I1=0;
+         if(SADC.Iin<50)   SADC.Iin=0;
+         if(SADC.Vin<50)   SADC.Vin=0;
+         if(SADC.Iout<50)  SADC.Iout=0;
+         if(SADC.Vout<50)  SADC.Vout=0;
+
+      //ä¸‹é¢æ ¹æ®æ”¾å¤§æ¯”ä¾‹å°†å¾—åˆ°çš„0-4096è½¬åŒ–æˆå®é™…çš„ç‰©ç†é‡ï¼Œå¦‚ç”µå‹ï¼Œç”µæµ
+
+
+
+      // å­˜å‚¨ADCè½¬æ¢ç»“æœåˆ°å…¨å±€å˜é‡æ•°ç»„ä¸­ï¼Œå¿½ç•¥ADCRESULT0ä½œä¸ºä¿®æ­£é”™è¯¯çš„æ–¹æ³•
+//      Voltage1[ConversionCount] = AdcResult.ADCRESULT1;
+//      Voltage2[ConversionCount] = AdcResult.ADCRESULT2;
+
+      // å¦‚æœå·²ç»è®°å½•äº†20æ¬¡è½¬æ¢ï¼Œé‡ç½®è®¡æ•°å™¨
+//      if(ConversionCount == 9)
+//      {
+//         ConversionCount = 0;
+//      }
+//      else
+//      {
+//          ConversionCount++; // å¦åˆ™ï¼Œå¢åŠ è½¬æ¢è®¡æ•°å™¨çš„å€¼
+//      }
 }
 
-//¸Ãº¯ÊıÊ¹ÓÃ´æ´¢ÔÚOTPÖĞµÄ²Î¿¼Êı¾İÀ´×ª»»Ô­Ê¼ÎÂ¶È
-//´«¸ĞÆ÷¶ÁÊıÎª¡æ
+
+
+
+/*
+** ===================================================================
+**     Funtion Name : void PwmReflash(void)
+**     Description :  PWMå¯„å­˜å™¨æ›´æ–°å‡½æ•°
+** ===================================================================
+*/
+#define PSFB_HALF 600
+
+void PwmReflash(void)
+{
+    //å®šä¹‰é¢‘ç‡å¯¹åº”çš„å‘¨æœŸé‡
+  //  static int PhaseShift;
+
+//    //Q15ç§»ç›¸è§’æ§åˆ¶é‡æ›´æ”¹æˆå®é™…PWMæ•°å­—é‡
+//    PhaseShift = (int)((ID2DCtrValue.Phase*PSFB_HALF)>>15);
+//
+//    //æ›´æ–°å¯„å­˜å™¨ï¼Œä¿æŒEPWE1ä¸åŠ¨ï¼Œè°ƒæ•´EPWM2ï¼Œå®ç°ç§»ç›¸
+//    EALLOW;
+//    EPwm2Regs.CMPA.half.CMPA=PhaseShift;
+//    EPwm2Regs.CMPB=PSFB_HALF+PhaseShift;
+//    //æ›´æ”¹ADCè§¦å‘ç‚¹
+//    EPwm3Regs.CMPA.half.CMPA=(PhaseShift>>1);
+//    EDIS;
+}
+
+
+
+//è¯¥å‡½æ•°ä½¿ç”¨å­˜å‚¨åœ¨OTPä¸­çš„å‚è€ƒæ•°æ®æ¥è½¬æ¢åŸå§‹æ¸©åº¦
+//ä¼ æ„Ÿå™¨è¯»æ•°ä¸ºâ„ƒ
 int16 GetTemperatureC(int16 sensorSample)
 {
     return ((sensorSample - getTempOffset())*(int32)getTempSlope() + FP_ROUND + KELVIN_OFF)/FP_SCALE - KELVIN;
 }
 
-//´«¸ĞÆ÷¶ÁÊıÎªK
+//ä¼ æ„Ÿå™¨è¯»æ•°ä¸ºK
 int16 GetTemperatureK(int16 sensorSample)
 {
     return ((sensorSample - getTempOffset())*(int32)getTempSlope() + FP_ROUND + KELVIN_OFF)/FP_SCALE;
 }
+
+
+
+
+
+
 
 
 

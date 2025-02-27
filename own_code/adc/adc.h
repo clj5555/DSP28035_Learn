@@ -1,6 +1,5 @@
 /*
  * adc.h
- *
  *  Created on: 2018-1-29
  *      Author: Administrator
  */
@@ -11,7 +10,7 @@
 #include "DSP2803x_Device.h"     // DSP2833x 头文件
 #include "DSP2803x_Examples.h"   // DSP2833x 例子相关头文件
 
-
+extern  struct  Get_Value SADC;
 
 #define ADC_MODCLK 3
 
@@ -30,10 +29,30 @@ extern Uint16 SampleTable[BUF_SIZE];
 #define KELVIN_OFF FP_SCALE*KELVIN
 
 
+
+//定义结构体 ADC数值的各种参数
+struct Get_Value
+{
+    long V0;
+
+    long V1;
+    long I1;
+
+    long Iin;
+    long Vin;
+
+    long Iout;
+    long Vout;
+};
+
+
 void ADC_Init(void);
 Uint16 Read_ADC_CH0_Value(void);
 void Read_ADC_SEQ1_Value_OVD(void);
 interrupt void  adc_isr(void);
+
+void ADCSample(void);
+void PwmReflash(void);
 
 //内部温度采集函数
 int16 GetTemperatureC(int16 sensorSample);

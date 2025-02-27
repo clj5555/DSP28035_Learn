@@ -5,6 +5,7 @@
 #include "iic.h"
 #include "adc.h"
 #include "sci.h"
+#include "EPWM.h"
 
 // 定义要控制的变量
 volatile Uint16 controlValue = 0;
@@ -36,8 +37,6 @@ void delay_loop()
 }
 
 
-
-
 int main(void)
 {
     // Step 1. 系统初始化
@@ -55,7 +54,7 @@ int main(void)
     OLED_Init();//OLED初始化
 
     USARTA_Init(38400);
-    Prints("hello wrold!");
+    USART1_SendString("hello wrold!");
     Prints("USART Test Begin:\r\n");
     Prints("Send DSP Some data,It Will Send Them Bcak!\r\n");
     TIM0_Init(60, Time0);
@@ -66,7 +65,7 @@ int main(void)
     // 全局中断使能
     EINT;
     ERTM;
-    
+
     OLED_Clear();
     OLED_ShowString(1,0,"This is an OLED",8);//
     OLED_ShowString(1,1,"example using",8);//
@@ -75,15 +74,15 @@ int main(void)
     {
         int32 voltage_int = (int32)(Vin * 1000);
 
-
  //       PrintLongInt(voltage_int);
        // Vin=3.3/4095.0*910.0/51.0*Voltage1[2];
-        Vin=3.3/4095.0*Voltage1[2]*10.0;
+        Vin=3.3/4095.0* SADC.V1*10.0;
         EPwm1A_SetCompare(1500);
         EPwm2A_SetCompare(1500);
         degC = GetTemperatureC(Voltage2[2]);
         degK = GetTemperatureK(Voltage2[2]);
-        OLED_ShowNum(0,3,Voltage1[2],5,16);
+        OLED_ShowNum(0,3,SADC.V1,5,16);
+        //OLED_ShowNum(0,3,Voltage1[2],5,16);
         OLED_ShowNum(40,3,Vin,3,16);
         OLED_ShowNum(0,5,degC,3,16);
         OLED_ShowNum(40,5,degK,3,16);
@@ -92,19 +91,19 @@ int main(void)
 //         delay_loop();
 //         LED1_OFF;
         //接收到的数据原路发送回去
-//        // 检查是否有接收到数据
-//        if (usart1_rx_length > 0)
-//        {
-//            Uint16 i;
-//            // 发送接收到的数据
-//            for (i = 0; i < usart1_rx_length; i++)
-//            {
-//                USART_Transmit(COM1_RxBuff[i]);
-//            }
-//
-//            // 重置接收数据长度计数器
-//            usart1_rx_length = 0;
-//        }
+        // 检查是否有接收到数据
+        if (usart1_rx_length > 0)
+        {
+            Uint16 i;
+            // 发送接收到的数据
+            for (i = 0; i < usart1_rx_length; i++)
+            {
+                USART_Transmit(COM1_RxBuff[i]);
+            }
+
+            // 重置接收数据长度计数器
+            usart1_rx_length = 0;
+        }
 
 
 
